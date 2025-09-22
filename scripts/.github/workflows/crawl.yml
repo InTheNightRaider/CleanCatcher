@@ -21,6 +21,7 @@ concurrency:
 permissions:
   contents: write
 
+# … existing header …
 jobs:
   crawl:
     runs-on: ubuntu-latest
@@ -30,17 +31,31 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
+
       - name: Run crawler
         env:
           CRAWL_LIMIT: ${{ github.event.inputs.limit || '50' }}
           CRAWL_OFFSET: ${{ github.event.inputs.offset || '0' }}
-        run: |
-          node scripts/crawl.js
+        run: node scripts/crawl.js
+
+      # 👇 NEW: export JSONL → CSV
+      - name: Export CSV snapshots
+        run: node scripts/export_csv.js
+
+      # 👇 commit any changes (JSONL and CSV)
       - name: Commit & push if changed
         run: |
           git config user.email "bot@users.noreply.github.com"
           git config user.name  "recrawl-bot"
           git add -A
           git diff --cached --quiet && echo "No changes." && exit 0
-          git commit -m "chore: recrawl $(date -u +%F)"
+          git commit -m "chore: recrawl & export $(date -u +%F)"
           git push
+
+      # 👇 OPTIONAL: upload downloadable artifact
+      - name: Upload CSVs as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: exports-csv
+          path: exports/*.csv
+
