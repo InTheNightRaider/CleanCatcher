@@ -1,0 +1,46 @@
+name: recrawl
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "How many brands to crawl this run"
+        required: false
+        default: "50"
+      offset:
+        description: "Start row (for paging through the list)"
+        required: false
+        default: "0"
+  schedule:
+    # Runs every Tuesday at 09:00 UTC (GitHub cron uses UTC; 09:00 UTC = 05:00 ET during EDT)
+    - cron: "0 9 * * 2"
+
+concurrency:
+  group: recrawl
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Run crawler
+        env:
+          CRAWL_LIMIT: ${{ github.event.inputs.limit || '50' }}
+          CRAWL_OFFSET: ${{ github.event.inputs.offset || '0' }}
+        run: |
+          node scripts/crawl.js
+      - name: Commit & push if changed
+        run: |
+          git config user.email "bot@users.noreply.github.com"
+          git config user.name  "recrawl-bot"
+          git add -A
+          git diff --cached --quiet && echo "No changes." && exit 0
+          git commit -m "chore: recrawl $(date -u +%F)"
+          git push
